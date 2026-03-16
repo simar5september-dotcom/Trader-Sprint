@@ -160,13 +160,16 @@ async function tsForgotPassword() {
   if (r.error) { tsMsg(r.error.message, 'error'); } else { tsMsg('Reset link sent! Check your email.', 'success'); }
 }
 async function tsLogout() {
-  var sb = getSB();
-  if (sb) await sb.auth.signOut();
-  var o = document.getElementById('ts-auth-overlay');
-  if (o) { o.style.display = 'flex'; o.style.opacity = '1'; o.style.pointerEvents = 'auto'; }
-  var b = document.getElementById('ts-user-badge');
-  if (b) b.remove();
-  tsShowLogin();
+  try {
+    var sb = getSB();
+    if (sb) await sb.auth.signOut();
+  } catch(e) {
+    console.warn('Logout error:', e);
+  }
+  // Clear local storage
+  localStorage.removeItem('sb-btixhfcqfpdcvsdvmbfi-auth-token');
+  // Reload the page to show login screen
+  window.location.reload();
 }
 async function tsInit() {
   var sb = getSB();
@@ -1088,7 +1091,6 @@ body {
 .trades-table tr:last-child td { border-bottom: none; }
 .trades-table tr:hover td { background: var(--surface2); }
 
-  
 .asset-badge {
   display: inline-flex;
   align-items: center;
