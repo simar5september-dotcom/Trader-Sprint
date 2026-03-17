@@ -6795,6 +6795,15 @@ function getFilteredTrades() {
     if (from && t.date < from) return false;
     if (to && t.date > to) return false;
 
+    // Account filter
+    if (dashFilter.account) {
+      if (dashFilter.account === 'main') {
+        if (t.accountId && t.accountId !== 'main') return false;
+      } else {
+        if (t.accountId !== dashFilter.account) return false;
+      }
+    }
+
     // Side filter
     if (typeof gfSides !== 'undefined' && gfSides.length) {
       if (!gfSides.includes(t.side)) return false;
@@ -6821,6 +6830,14 @@ function getFilteredTrades() {
         ? !gfStrategies.includes(t.strategy)
         : gfStrategies.includes(t.strategy);
       if (!match) return false;
+    }
+    // Tags filter (mistakes, positives, emotion)
+    if (typeof gfTags !== 'undefined' && gfTags.length) {
+      const tradeTags = [];
+      if (t.mistakes) t.mistakes.split(',').forEach(function(x){ var v=x.trim(); if(v) tradeTags.push(v); });
+      if (t.positives) t.positives.split(',').forEach(function(x){ var v=x.trim(); if(v) tradeTags.push(v); });
+      if (t.emotion && t.emotion.trim()) tradeTags.push(t.emotion.trim());
+      if (!gfTags.some(function(tag){ return tradeTags.includes(tag); })) return false;
     }
     // Entry time window
     if (typeof gfEntryFrom !== 'undefined' && gfEntryFrom && t.entryTime) {
@@ -14006,7 +14023,7 @@ function confirmRenameAccount() {
 
 /* ─── GLOBAL DATE FILTER ─── */
 let globalFilterFrom = null, globalFilterTo = null, globalFilterActive = false;
-let gfSides = [], gfResults = [], gfDays = [], gfMonths = [], gfStrategies = [], gfInsights = [];
+let gfSides = [], gfResults = [], gfDays = [], gfMonths = [], gfStrategies = [], gfInsights = [], gfTags = [];
 let gfStratMode = 'include', gfStratMatch = 'any';
 let gfEntryFrom = '', gfEntryTo = '', gfExitFrom = '', gfExitTo = '';
 
@@ -14130,7 +14147,8 @@ function _gfPopulateTags() {
   var tags = Object.keys(tagSet);
   if (!tags.length) { list.innerHTML = '<div style="font-size:12px;color:var(--ink3)">No tags in trades yet.</div>'; return; }
   list.innerHTML = tags.map(function(tag) {
-    return '<label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer"><input type="checkbox" style="width:15px;height:15px;accent-color:var(--accent)"><span style="font-size:13px;color:var(--ink)">' + tag + '</span></label>';
+    var chk = gfTags.includes(tag) ? ' checked' : '';
+    return '<label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer"><input type="checkbox"' + chk + ' onchange="gfToggleTag(\'' + tag.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\',this.checked)" style="width:15px;height:15px;accent-color:var(--accent)"><span style="font-size:13px;color:var(--ink)">' + tag + '</span></label>';
   }).join('');
 }
 
@@ -14149,6 +14167,11 @@ function gfToggleStrategy(name, checked) {
 function gfToggleInsight(id, checked) {
   gfInsights = checked ? gfInsights.concat([id]).filter(function(v,i,a){return a.indexOf(v)===i;}) : gfInsights.filter(function(x){return x!==id;});
   _gfUpdateDot('insights', gfInsights.length > 0);
+}
+
+function gfToggleTag(tag, checked) {
+  gfTags = checked ? gfTags.concat([tag]).filter(function(v,i,a){return a.indexOf(v)===i;}) : gfTags.filter(function(x){return x!==tag;});
+  _gfUpdateDot('tags', gfTags.length > 0);
 }
 
 function gfToggleSide(side, btn) {
@@ -14228,7 +14251,7 @@ function applyGlobalFilter() {
   gfEntryTo   = (etEl && etEl.value) ? etEl.value : '';
   gfExitFrom  = (xfEl && xfEl.value) ? xfEl.value : '';
   gfExitTo    = (xtEl && xtEl.value) ? xtEl.value : '';
-  globalFilterActive = !!(globalFilterFrom || globalFilterTo || gfSides.length || gfResults.length || gfDays.length || gfMonths.length || gfStrategies.length || gfInsights.length || gfEntryFrom || gfExitFrom);
+  globalFilterActive = !!(globalFilterFrom || globalFilterTo || gfSides.length || gfResults.length || gfDays.length || gfMonths.length || gfStrategies.length || gfInsights.length || gfTags.length || gfEntryFrom || gfExitFrom);
   var dot = document.getElementById('global-filter-dot');
   if (dot) dot.style.display = globalFilterActive ? 'inline-block' : 'none';
   if (globalFilterFrom) { var el = document.getElementById('dash-from'); if (el) el.value = globalFilterFrom; }
@@ -14240,7 +14263,7 @@ function applyGlobalFilter() {
 
 function clearGlobalFilter() {
   globalFilterFrom = null; globalFilterTo = null; globalFilterActive = false;
-  gfSides = []; gfResults = []; gfDays = []; gfMonths = []; gfStrategies = []; gfInsights = [];
+  gfSides = []; gfResults = []; gfDays = []; gfMonths = []; gfStrategies = []; gfInsights = []; gfTags = [];
   gfEntryFrom = ''; gfEntryTo = ''; gfExitFrom = ''; gfExitTo = '';
   var fEl = document.getElementById('gf-from'), tEl = document.getElementById('gf-to');
   if (fEl) fEl.value = ''; if (tEl) tEl.value = '';
@@ -14992,7 +15015,7 @@ function renderTrades() {
   const dot = document.getElementById('tl-filter-dot');
   if (dot) dot.style.display = _tlHasActiveFilters() ? 'inline-block' : 'none';
 
-  let filtered = trades.filter(t => {
+  let filtered = getFilteredTrades().filter(t => {
     if (search) {
       const dateMatch = t.date && t.date.startsWith(search);
       const textMatch = (t.symbol||'').toLowerCase().includes(search) || (t.strategy||'').toLowerCase().includes(search);
